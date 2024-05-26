@@ -801,10 +801,10 @@ int main() {
             // Apply a rough culling. 
             // This can also avoid unstable splat projection
             // aabb in viewspace
-            float dx2 = (u.x * u.x + v.x * v.x + v.x * v.x);
-            float dy2 = (u.y * u.y + v.y * v.y + v.y * v.y);
-            float dz2 = (u.z * u.z + v.z * v.z + v.z * v.z);
-            float diagH_raySpace = sqrt( dx2 + dy2 + dz2 ) / -u_camera.z; // half diagonal
+            // float dx2 = (u.x * u.x + v.x * v.x + w.x * w.x);
+            // float dy2 = (u.y * u.y + v.y * v.y + w.y * w.y);
+            // float dz2 = (u.z * u.z + v.z * v.z + w.z * w.z);
+            float diagH_raySpace = sqrt( cov_00 + cov_11 + cov_22 ) / -u_camera.z; // half diagonal
             if(x_rayspace.x + diagH_raySpace < -tanThetaX || tanThetaX < x_rayspace.x - diagH_raySpace ||
                 x_rayspace.y + diagH_raySpace < -tanThetaY || tanThetaY < x_rayspace.y - diagH_raySpace )
             {

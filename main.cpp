@@ -420,6 +420,7 @@ int main() {
 
     Camera3D camera;
     camera.origin = { 4, 4, 4 };
+    // camera.origin = { 4.41570, 0.82581, -5.27443 };
     camera.lookat = { 0, 0, 0 };
     camera.zNear = 0.4f;
     camera.zFar = 1000.0f;
@@ -448,10 +449,27 @@ int main() {
 
         DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
 
+        static glm::vec3 rotation_handle = { -0.18264, -1.49141, -1.84652 };
+        ManipulatePosition(camera, &rotation_handle, 0.2f);
+        DrawArrow({ 0,0,0 }, rotation_handle, 0.01f, { 0,255,255 });
+        glm::mat3 modelMat = glm::identity<glm::mat3>();
+        {
+            glm::vec3 xaxis, yaxis;
+            GetOrthonormalBasis(glm::normalize(rotation_handle), &xaxis, &yaxis);
+            modelMat = { xaxis, yaxis, glm::normalize(rotation_handle) };
+        }
+
+        // printf("%.5f, %.5f, %.5f\n", rotation_handle.x, rotation_handle.y, rotation_handle.z);
+        printf("%.5f, %.5f, %.5f\n", camera.origin.x, camera.origin.y, camera.origin.z);
+
+        DrawSphere({ 4,4,4 }, 0.01f, { 0, 255, 0 });
+
+        SetObjectTransform(modelMat);
+
         PrimBegin(PrimitiveMode::Points, 2);
         for (int i = 0; i < pointCould.size(); i++)
         {
-            if (i != 802435)
+            if (i != 1783434)
                 continue;
 
             glm::vec3 p = {
@@ -476,7 +494,7 @@ int main() {
         PrimBegin(PrimitiveMode::Lines, 2);
         for (int i = 0; i < pointCould.size(); i++)
         {
-            if (i != 802435)
+            if (i != 1783434)
                 continue;
             glm::vec3 p = {
                 pointCould.value(i, ATTRIB_X),
@@ -554,18 +572,8 @@ int main() {
         //    }
         //}
         //PrimEnd();
+        SetObjectIdentify();
 
-        static glm::vec3 rotation_handle = { -0.18264, -1.55077, -1.84652 };
-        ManipulatePosition(camera, &rotation_handle, 0.2f);
-        DrawArrow({ 0,0,0 }, rotation_handle, 0.01f, { 0,255,255 });
-        glm::mat3 modelMat;
-        {
-            glm::vec3 xaxis, yaxis;
-            GetOrthonormalBasis(glm::normalize(rotation_handle), &xaxis, &yaxis);
-            modelMat = { xaxis, yaxis, glm::normalize(rotation_handle) };
-        }
-
-       // printf("%.5f, %.5f, %.5f\n", rotation_handle.x, rotation_handle.y, rotation_handle.z);
         static bool RT_mode = false;
         static bool showWire = true;
 
@@ -623,9 +631,31 @@ int main() {
         glm::mat4 viewMat = GetCurrentViewMatrix() * glm::mat4(modelMat);
         glm::mat3 viewRot = glm::mat3(viewMat); 
 
-        for (int i = 0; i < pointCould.size(); i++)
+        static std::vector<int>   pointIndices;
+        static std::vector<float> pointDepthes;
+        pointIndices.resize(pointCould.size());
+        pointDepthes.resize(pointCould.size());
+        for (int i = 0; i < pointIndices.size(); i++)
         {
-            //if (i != 802435)
+            pointIndices[i] = i;
+
+            glm::vec3 p = {
+                pointCould.value(i, ATTRIB_X),
+                pointCould.value(i, ATTRIB_Y),
+                pointCould.value(i, ATTRIB_Z),
+            };
+            pointDepthes[i] = (viewMat * glm::vec4( p.x, p.y, p.z, 1 )).z;
+        }
+        std::sort(pointIndices.begin(), pointIndices.end(), [](int a, int b) { return pointDepthes[a] < pointDepthes[b]; });
+
+
+        // for (int i = 0; i < pointCould.size(); i++)
+        for( auto i : pointIndices )
+        {
+            //if (i != 1783434)
+            //    continue;
+
+            //if (i == 1783434)
             //    continue;
 
             glm::vec3 p = {
@@ -679,6 +709,22 @@ int main() {
             }
             glm::vec2 x_rayspace = glm::vec2(u_camera.x / -u_camera.z, u_camera.y / -u_camera.z);
 
+            float tanThetaY = std::tan(camera.fovy * 0.5f);
+            float tanThetaX = tanThetaY / image.height() * image.width();
+
+            // Apply a rough culling. 
+            // This can also avoid unstable splat projection
+            // aabb in viewspace
+            float dx2 = (u.x * u.x + v.x * v.x + v.x * v.x);
+            float dy2 = (u.y * u.y + v.y * v.y + v.y * v.y);
+            float dz2 = (u.z * u.z + v.z * v.z + v.z * v.z);
+            float diagH_raySpace = sqrt( dx2 + dy2 + dz2 ) / -u_camera.z; // half diagonal
+            if(x_rayspace.x + diagH_raySpace < -tanThetaX || tanThetaX < x_rayspace.x - diagH_raySpace ||
+                x_rayspace.y + diagH_raySpace < -tanThetaY || tanThetaY < x_rayspace.y - diagH_raySpace )
+            {
+                continue;
+            }
+
             glm::mat3 J;
             J = {
                 1.0f / u_camera.z, 0, 0,
@@ -693,10 +739,6 @@ int main() {
             );
 
             glm::mat2 invCovPrime2d = glm::inverse(covPrime2d);
-
-            float tanThetaY = std::tan(camera.fovy * 0.5f);
-            float tanThetaX = tanThetaY / image.height() * image.width();
-            float pxPerTanTheta = image.height() / tanThetaY * 2.0f;
 
             //glm::vec2 v_rel = glm::vec2(
             //    glm::mix(-tanThetaX, tanThetaX, (float)i / image.width()),
@@ -733,7 +775,6 @@ int main() {
                 if( y < 0 || image.height() <= y )
                     continue;
 
-
                 // Minimum range of x
                 float vy = remap( y, 0, image.height() - 1, tanThetaY, -tanThetaY ) - x_rayspace.y;
                 float a = invCovPrime2d[0][0];
@@ -751,12 +792,17 @@ int main() {
                     begX = remap(x_rayspace.x + xs[0], -tanThetaX, tanThetaX, 0, image.width() - 1);
                     endX = remap(x_rayspace.x + xs[1], -tanThetaX, tanThetaX, 0, image.width() - 1);
                 }
-                if (begX < 0 || image.width() <= begX)
+                if (endX < 0 || image.width() <= begX)
                 {
                     continue;
                 }
                 begX = ss_max(begX, 0);
                 endX = ss_min(endX, image.width() - 1);
+
+                //if (endY - begY > 500)
+                //{
+                //    printf("");
+                //}
 
                 //float midX = remap( x_rayspace.x, -tanThetaX, tanThetaX, 0, image.width() - 1 );
                 //int begX = midX - 2;
@@ -766,12 +812,6 @@ int main() {
                 {
                     if (x < 0 || image.width() <= x)
                         continue;
-
-
-                    if (abs(endX - begX) > 700)
-                    {
-                        printf("");
-                    }
 
                     //image(x, y) = glm::vec4(1, 1, 1, 1);
                     image(x, y) = glm::vec4(col, 1);

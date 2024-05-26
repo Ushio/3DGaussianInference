@@ -1,6 +1,11 @@
 ﻿#include "pr.hpp"
 #include <iostream>
 #include <memory>
+#include <ppl.h>
+
+
+#define SPLAT_BOUNDS 3.0f
+#define MIN_THROUGHPUT ( 1.0f / 256.0f )
 
 template <class T>
 inline T ss_max(T x, T y)
@@ -391,6 +396,32 @@ static float remap(float value, float inputMin, float inputMax, float outputMin,
 {
     return (value - inputMin) * ((outputMax - outputMin) / (inputMax - inputMin)) + outputMin;
 }
+inline int32_t __float_as_int(float x)
+{
+    int i;
+    memcpy(&i, &x, 4);
+    return i;
+}
+inline uint32_t __float_as_uint(float x)
+{
+    uint32_t i;
+    memcpy(&i, &x, 4);
+    return i;
+}
+inline uint32_t getKeyBits( float x )
+{
+    if (x == 0.0f)
+        x = 0.0f;
+
+    uint32_t flip = uint32_t(__float_as_int(x) >> 31) | 0x80000000;
+    return __float_as_uint(x) ^ flip;
+}
+
+float sigmoid(float x)
+{
+    return 1.0f / (1.0f + std::exp(-x));
+}
+
 int main() {
     using namespace pr;
 
@@ -411,6 +442,7 @@ int main() {
     int ATTRIB_SX = pointCould.attrib_offset("scale_0");
     int ATTRIB_SY = pointCould.attrib_offset("scale_1");
     int ATTRIB_SZ = pointCould.attrib_offset("scale_2");
+    int ATTRIB_O = pointCould.attrib_offset("opacity");
 
     Config config;
     config.ScreenWidth = 1920;
@@ -646,8 +678,17 @@ int main() {
             };
             pointDepthes[i] = (viewMat * glm::vec4( p.x, p.y, p.z, 1 )).z;
         }
-        std::sort(pointIndices.begin(), pointIndices.end(), [](int a, int b) { return pointDepthes[a] < pointDepthes[b]; });
 
+        // front to back
+        //std::sort(pointIndices.begin(), pointIndices.end(), [](int a, int b) { return pointDepthes[a] > pointDepthes[b]; });
+
+        // front to back
+        concurrency::parallel_radixsort(pointIndices.begin(), pointIndices.end(), [](int x) { return getKeyBits(pointDepthes[x]) ^ 0xFFFFFFFF; });
+
+        float tanThetaY = std::tan(camera.fovy * 0.5f);
+        float tanThetaX = tanThetaY / image.height() * image.width();
+
+        std::fill(image.data(), image.data() + image.width() * image.height(), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
         // for (int i = 0; i < pointCould.size(); i++)
         for( auto i : pointIndices )
@@ -676,12 +717,13 @@ int main() {
             };
             glm::mat3 R = glm::mat3_cast(q);
 
-            glm::vec3 col = {
+            glm::vec3 splat_col = {
                 pointCould.value(i, ATTRIB_R),
                 pointCould.value(i, ATTRIB_G),
                 pointCould.value(i, ATTRIB_B),
             };
-            col = glm::clamp(col, glm::vec3(0), glm::vec3(1));
+            splat_col = glm::clamp(splat_col, glm::vec3(0), glm::vec3(1));
+            float opacity = sigmoid ( pointCould.value(i, ATTRIB_O) );
 
             glm::vec3 u = viewRot * R[0] * s.x;
             glm::vec3 v = viewRot * R[1] * s.y;
@@ -708,9 +750,6 @@ int main() {
                 continue;
             }
             glm::vec2 x_rayspace = glm::vec2(u_camera.x / -u_camera.z, u_camera.y / -u_camera.z);
-
-            float tanThetaY = std::tan(camera.fovy * 0.5f);
-            float tanThetaX = tanThetaY / image.height() * image.width();
 
             // Apply a rough culling. 
             // This can also avoid unstable splat projection
@@ -748,8 +787,6 @@ int main() {
             float det_of_cov = glm::determinant( covPrime2d );
             //if( glm::abs(det_of_cov) < 0.0000001f )
             //    continue;
-
-            float SPLAT_BOUNDS = 1.0f;
 
             // The exact bounding box from covariance matrix
             float hsize_invCovY = std::sqrt(invCovPrime2d[0][0] * det_of_cov) * SPLAT_BOUNDS;
@@ -814,29 +851,43 @@ int main() {
                         continue;
 
                     //image(x, y) = glm::vec4(1, 1, 1, 1);
-                    image(x, y) = glm::vec4(col, 1);
+                    // image(x, y) = glm::vec4(splat_col, 1);
 
-                    //// w as throughput
-                    //glm::vec4 color = image0(x, y);
-                    //float T = color.w;
+                    // w as throughput
+                    glm::vec4 color = image(x, y);
+                    float T = color.w;
 
-                    //if (T < MIN_THROUGHPUT)
-                    //    continue;
+                    if (T < MIN_THROUGHPUT)
+                        continue;
 
-                    //glm::vec2 p = { x + 0.5f, y + 0.5f };
-                    //glm::vec2 v = p - s.pos;
+                    glm::vec2 p_rayspace = {
+                        remap(x, 0, image.width() - 1, -tanThetaX, tanThetaX ),
+                        remap(y, 0, image.height() - 1, tanThetaY, -tanThetaY )
+                    };
+                    glm::vec2 v = p_rayspace - x_rayspace;
 
-                    //float d2 = glm::dot(v, inv_cov * v);
-                    //float alpha = exp_approx(-0.5f * d2) * s.opacity;
+                    float d2 = glm::dot(v, invCovPrime2d * v);
+                    float alpha = expf(-0.5f * d2) * opacity;
 
-                    //color.x += T * s.color.x * alpha;
-                    //color.y += T * s.color.y * alpha;
-                    //color.z += T * s.color.z * alpha;
+                    color.x += T * splat_col.x * alpha;
+                    color.y += T * splat_col.y * alpha;
+                    color.z += T * splat_col.z * alpha;
 
-                    //color.w *= (1.0f - alpha);
+                    color.w *= (1.0f - alpha);
 
-                    //image0(x, y) = color;
+                    image(x, y) = color;
                 }
+            }
+        }
+
+        {
+            glm::vec4* ptr = image.data();
+            for (int i = 0; i < image.width() * image.height(); i++)
+            {
+                ptr[i].x = std::pow(  ptr[i].x, 1.0f / 2.2f );
+                ptr[i].y = std::pow(  ptr[i].y, 1.0f / 2.2f );
+                ptr[i].z = std::pow(  ptr[i].z, 1.0f / 2.2f );
+                ptr[i].w = 1.0f;
             }
         }
 
@@ -952,6 +1003,9 @@ int main() {
         //        }
         //    }
         //}
+        
+
+
         tex->upload(image);
 
         PopGraphicState();

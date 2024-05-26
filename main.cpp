@@ -422,6 +422,54 @@ float sigmoid(float x)
     return 1.0f / (1.0f + std::exp(-x));
 }
 
+glm::mat2 applyJacobian( float cov_00, float cov_01, float cov_02, float cov_11, float cov_12, float cov_22, float ka, float kb, float kc )
+{
+    float ka2 = ka * ka;
+    float kb2 = kb * kb;
+    float kc2 = kc * kc;
+
+    float m00 = cov_00 * ka2 + cov_02 * 2.0f * ka * kb + cov_22 * kb2;
+    float m11 = cov_11 * ka2 + cov_12 * 2.0f * ka * kc + cov_22 * kc2;
+    float m01 = cov_01 * ka2 + cov_12 * ka * kb + cov_02 * ka * kc + cov_22 * kb * kc;
+    return { m00, m01, m01, m11 };
+}
+
+float exp_approx(float x)
+{
+    // return expf( glm::clamp( x, -16.0f, 16.0f ) ); // use this for numerical varidation
+
+    /*
+    float L = 0.0f;
+    float R = 1.0f;
+    for (int i = 0 ; i < 1000 ; i++)
+    {
+        float m = ( L + R ) * 0.5f;
+        float x = m;
+        x *= x;
+        x *= x;
+        x *= x;
+        if( x == 0.0f || fpclassify(x) == FP_SUBNORMAL )
+        {
+            L = m;
+        }
+        else
+        {
+            R = m;
+        }
+    }
+    printf( "%.32f\n", R ); >> 0.00001814586175896693021059036255
+    */
+    x = 1.0f + x / 8.0f;
+    if (x < 0.00001814586175896693021059036255f) // avoid subnormal
+    {
+        return 0.0f;
+    }
+    x *= x;
+    x *= x;
+    x *= x;
+    return x;
+}
+
 int main() {
     using namespace pr;
 
@@ -764,25 +812,23 @@ int main() {
                 continue;
             }
 
-            glm::mat3 J;
-            J = {
-                1.0f / u_camera.z, 0, 0,
-                0, 1.0f / u_camera.z, 0,
-                -u_camera.x / (u_camera.z * u_camera.z), -u_camera.y / (u_camera.z * u_camera.z), 1.0f
-            };
+            //glm::mat3 J;
+            //J = {
+            //    1.0f / u_camera.z, 0, 0,
+            //    0, 1.0f / u_camera.z, 0,
+            //    -u_camera.x / (u_camera.z * u_camera.z), -u_camera.y / (u_camera.z * u_camera.z), 1.0f
+            //};
 
-            glm::mat3 covPrime = J * cov * glm::transpose(J);
-            glm::mat2 covPrime2d = glm::mat2(
-                covPrime[0][0], covPrime[0][1],
-                covPrime[1][0], covPrime[1][1]
-            );
+            //glm::mat3 covPrime = J * cov * glm::transpose(J);
+            //glm::mat2 covPrime2d = glm::mat2(
+            //    covPrime[0][0], covPrime[0][1],
+            //    covPrime[1][0], covPrime[1][1]
+            //);
+
+            glm::mat2 covPrime2d = applyJacobian(cov[0][0], cov[1][0], cov[2][0], cov[1][1], cov[2][1], cov[2][2], 1.0f / u_camera.z, -u_camera.x / (u_camera.z * u_camera.z), -u_camera.y / (u_camera.z * u_camera.z));
 
             glm::mat2 invCovPrime2d = glm::inverse(covPrime2d);
 
-            //glm::vec2 v_rel = glm::vec2(
-            //    glm::mix(-tanThetaX, tanThetaX, (float)i / image.width()),
-            //    glm::mix(tanThetaY, -tanThetaY, (float)j / image.height())
-            //) - glm::vec2(u_ray.x / -u_ray.z, u_ray.y / -u_ray.z); // z is negative
 
             float det_of_cov = glm::determinant( covPrime2d );
             //if( glm::abs(det_of_cov) < 0.0000001f )
@@ -867,7 +913,7 @@ int main() {
                     glm::vec2 v = p_rayspace - x_rayspace;
 
                     float d2 = glm::dot(v, invCovPrime2d * v);
-                    float alpha = expf(-0.5f * d2) * opacity;
+                    float alpha = exp_approx(-0.5f * d2) * opacity;
 
                     color.x += T * splat_col.x * alpha;
                     color.y += T * splat_col.y * alpha;

@@ -546,64 +546,62 @@ int main() {
 
         SetObjectTransform(modelMat);
 
-        PrimBegin(PrimitiveMode::Points, 2);
-        for (int i = 0; i < pointCould.size(); i++)
-        {
-            if (i != 1783434)
-                continue;
+        //PrimBegin(PrimitiveMode::Points, 2);
+        //for (int i = 0; i < pointCould.size(); i++)
+        //{
+        //    //if (i != 1783434)
+        //    //    continue;
 
-            glm::vec3 p = {
-                pointCould.value(i, ATTRIB_X),
-                pointCould.value(i, ATTRIB_Y),
-                pointCould.value(i, ATTRIB_Z),
-            };
-            glm::vec3 col = {
-                pointCould.value(i, ATTRIB_R),
-                pointCould.value(i, ATTRIB_G),
-                pointCould.value(i, ATTRIB_B),
-            };
-            col = glm::clamp(col, glm::vec3(0), glm::vec3(1));
-            col.x = std::pow(col.x, 1.0f / 2.2f);
-            col.g = std::pow(col.g, 1.0f / 2.2f);
-            col.z = std::pow(col.z, 1.0f / 2.2f);
+        //    glm::vec3 p = {
+        //        pointCould.value(i, ATTRIB_X),
+        //        pointCould.value(i, ATTRIB_Y),
+        //        pointCould.value(i, ATTRIB_Z),
+        //    };
+        //    float SH_C0 = 0.28209479177387814;
+        //    glm::vec3 splat_col = {
+        //        0.5f + SH_C0 * pointCould.value(i, ATTRIB_R),
+        //        0.5f + SH_C0 * pointCould.value(i, ATTRIB_G),
+        //        0.5f + SH_C0 * pointCould.value(i, ATTRIB_B),
+        //    };
+        //    splat_col = glm::clamp(splat_col, glm::vec3(0), glm::vec3(1));
 
-            PrimVertex(p, col * 255.0f );
-        }
-        PrimEnd();
+        //    PrimVertex(p, splat_col * 255.0f );
+        //}
+        //PrimEnd();
 
-        PrimBegin(PrimitiveMode::Lines, 2);
-        for (int i = 0; i < pointCould.size(); i++)
-        {
-            if (i != 1783434)
-                continue;
-            glm::vec3 p = {
-                pointCould.value(i, ATTRIB_X),
-                pointCould.value(i, ATTRIB_Y),
-                pointCould.value(i, ATTRIB_Z),
-            };
-            glm::vec3 s = {
-                std::expf( pointCould.value(i, ATTRIB_SX) ),
-                std::expf( pointCould.value(i, ATTRIB_SY) ),
-                std::expf( pointCould.value(i, ATTRIB_SZ) ),
-            };
-            glm::quat q = {
-                pointCould.value(i, ATTRIB_QX),
-                pointCould.value(i, ATTRIB_QY),
-                pointCould.value(i, ATTRIB_QZ),
-                pointCould.value(i, ATTRIB_QW)
-            };
-            glm::mat3 R = glm::mat3_cast(q);
-            glm::u8vec3 CR = { 255, 0, 0 };
-            glm::u8vec3 CG = { 0, 255, 0 };
-            glm::u8vec3 CB = { 0, 0, 255 };
-            PrimVertex(p, CR);
-            PrimVertex(p + R[0] * s.x, CR);
-            PrimVertex(p, CG);
-            PrimVertex(p + R[1] * s.y, CG);
-            PrimVertex(p, CB);
-            PrimVertex(p + R[2] * s.z, CB);
-        }
-        PrimEnd();
+        //PrimBegin(PrimitiveMode::Lines, 2);
+        //for (int i = 0; i < pointCould.size(); i++)
+        //{
+        //    if (i != 1783434)
+        //        continue;
+        //    glm::vec3 p = {
+        //        pointCould.value(i, ATTRIB_X),
+        //        pointCould.value(i, ATTRIB_Y),
+        //        pointCould.value(i, ATTRIB_Z),
+        //    };
+        //    glm::vec3 s = {
+        //        std::expf( pointCould.value(i, ATTRIB_SX) ),
+        //        std::expf( pointCould.value(i, ATTRIB_SY) ),
+        //        std::expf( pointCould.value(i, ATTRIB_SZ) ),
+        //    };
+        //    glm::quat q = {
+        //        pointCould.value(i, ATTRIB_QX),
+        //        pointCould.value(i, ATTRIB_QY),
+        //        pointCould.value(i, ATTRIB_QZ),
+        //        pointCould.value(i, ATTRIB_QW)
+        //    };
+        //    glm::mat3 R = glm::mat3_cast(q);
+        //    glm::u8vec3 CR = { 255, 0, 0 };
+        //    glm::u8vec3 CG = { 0, 255, 0 };
+        //    glm::u8vec3 CB = { 0, 0, 255 };
+        //    PrimVertex(p, CR);
+        //    PrimVertex(p + R[0] * s.x, CR);
+        //    PrimVertex(p, CG);
+        //    PrimVertex(p + R[1] * s.y, CG);
+        //    PrimVertex(p, CB);
+        //    PrimVertex(p + R[2] * s.z, CB);
+        //}
+        //PrimEnd();
 
         //PrimBegin(PrimitiveMode::Lines, 1);
         //for (int i = 0; i < pointCould.size(); i++ )
@@ -765,10 +763,11 @@ int main() {
             };
             glm::mat3 R = glm::mat3_cast(q);
 
+            float SH_C0 = 0.28209479177387814;
             glm::vec3 splat_col = {
-                pointCould.value(i, ATTRIB_R),
-                pointCould.value(i, ATTRIB_G),
-                pointCould.value(i, ATTRIB_B),
+                0.5f + SH_C0 * pointCould.value(i, ATTRIB_R),
+                0.5f + SH_C0 * pointCould.value(i, ATTRIB_G),
+                0.5f + SH_C0 * pointCould.value(i, ATTRIB_B),
             };
             splat_col = glm::clamp(splat_col, glm::vec3(0), glm::vec3(1));
             float opacity = sigmoid ( pointCould.value(i, ATTRIB_O) );
@@ -930,9 +929,9 @@ int main() {
             glm::vec4* ptr = image.data();
             for (int i = 0; i < image.width() * image.height(); i++)
             {
-                ptr[i].x = std::pow(  ptr[i].x, 1.0f / 2.2f );
-                ptr[i].y = std::pow(  ptr[i].y, 1.0f / 2.2f );
-                ptr[i].z = std::pow(  ptr[i].z, 1.0f / 2.2f );
+                //ptr[i].x = std::pow(  ptr[i].x, 1.0f / 2.2f );
+                //ptr[i].y = std::pow(  ptr[i].y, 1.0f / 2.2f );
+                //ptr[i].z = std::pow(  ptr[i].z, 1.0f / 2.2f );
                 ptr[i].w = 1.0f;
             }
         }

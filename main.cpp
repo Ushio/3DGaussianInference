@@ -476,7 +476,7 @@ int main() {
     SetDataDir(ExecutableDir());
 
     PLYFile pointCould;
-    pointCould.load(GetDataPath("models/kitchen/point_cloud/iteration_30000/point_cloud.ply").c_str());
+    pointCould.load(GetDataPath("models/bicycle/point_cloud/iteration_30000/point_cloud.ply").c_str());
     int ATTRIB_X = pointCould.attrib_offset("x");
     int ATTRIB_Y = pointCould.attrib_offset("y");
     int ATTRIB_Z = pointCould.attrib_offset("z");
@@ -513,7 +513,7 @@ int main() {
 
     ITexture* tex = CreateTexture();
     Image2DRGBA32 image;
-    int stride = 2;
+    int stride = 4;
 
     while (pr::NextFrame() == false) {
         if (IsImGuiUsingMouse() == false) {
@@ -726,10 +726,11 @@ int main() {
         }
 
         // front to back
-        //std::sort(pointIndices.begin(), pointIndices.end(), [](int a, int b) { return pointDepthes[a] > pointDepthes[b]; });
-
-        // front to back
+#if NDEBUG
+        std::sort(pointIndices.begin(), pointIndices.end(), [](int a, int b) { return pointDepthes[a] > pointDepthes[b]; });
+#else
         concurrency::parallel_radixsort(pointIndices.begin(), pointIndices.end(), [](int x) { return getKeyBits(pointDepthes[x]) ^ 0xFFFFFFFF; });
+#endif
 
         float tanThetaY = std::tan(camera.fovy * 0.5f);
         float tanThetaX = tanThetaY / image.height() * image.width();
@@ -823,13 +824,22 @@ int main() {
             //    covPrime[0][0], covPrime[0][1],
             //    covPrime[1][0], covPrime[1][1]
             //);
-
+            float pxSize = tanThetaX * 2.0f / image.width();
             glm::mat2 covPrime2d = applyJacobian(cov[0][0], cov[1][0], cov[2][0], cov[1][1], cov[2][1], cov[2][2], 1.0f / u_camera.z, -u_camera.x / (u_camera.z * u_camera.z), -u_camera.y / (u_camera.z * u_camera.z));
+            float det_of_cov = glm::determinant(covPrime2d);
+            if (glm::abs(det_of_cov) < sqr(pxSize / 32.0f * pxSize / 32.0f))
+            {
+                continue;
+            }
+            
+            // dilation approach 
+            //covPrime2d[0][0] += sqr( pxSize / 16.0f );
+            //covPrime2d[1][1] += sqr( pxSize / 16.0f );
 
             glm::mat2 invCovPrime2d = glm::inverse(covPrime2d);
 
 
-            float det_of_cov = glm::determinant( covPrime2d );
+
             //if( glm::abs(det_of_cov) < 0.0000001f )
             //    continue;
 
@@ -912,7 +922,7 @@ int main() {
                     glm::vec2 v = p_rayspace - x_rayspace;
 
                     float d2 = glm::dot(v, invCovPrime2d * v);
-                    float alpha = exp_approx(-0.5f * d2) * opacity;
+                    float alpha = exp_approx(-0.5f * ss_max(d2, 0.0f)) * opacity;
 
                     color.x += T * splat_col.x * alpha;
                     color.y += T * splat_col.y * alpha;
@@ -920,7 +930,13 @@ int main() {
 
                     color.w *= (1.0f - alpha);
 
+                    //if (isfinite(color.x) == false)
+                    //{
+                    //    printf("a");
+                    //    exp_approx(-0.5f * d2);
+                    //}
                     image(x, y) = color;
+                    // image(x, y) = { 1, 0, 1, color.w };
                 }
             }
         }

@@ -476,7 +476,7 @@ int main() {
     SetDataDir(ExecutableDir());
 
     PLYFile pointCould;
-    pointCould.load(GetDataPath("models/bicycle/point_cloud/iteration_30000/point_cloud.ply").c_str());
+    pointCould.load(GetDataPath("models/kitchen/point_cloud/iteration_30000/point_cloud.ply").c_str());
     int ATTRIB_X = pointCould.attrib_offset("x");
     int ATTRIB_Y = pointCould.attrib_offset("y");
     int ATTRIB_Z = pointCould.attrib_offset("z");
@@ -513,7 +513,7 @@ int main() {
 
     ITexture* tex = CreateTexture();
     Image2DRGBA32 image;
-    int stride = 4;
+    int stride = 2;
 
     while (pr::NextFrame() == false) {
         if (IsImGuiUsingMouse() == false) {
@@ -805,9 +805,15 @@ int main() {
             // float dx2 = (u.x * u.x + v.x * v.x + w.x * w.x);
             // float dy2 = (u.y * u.y + v.y * v.y + w.y * w.y);
             // float dz2 = (u.z * u.z + v.z * v.z + w.z * w.z);
-            float diagH_raySpace = sqrt( cov_00 + cov_11 + cov_22 ) / -u_camera.z; // half diagonal
-            if(x_rayspace.x + diagH_raySpace < -tanThetaX || tanThetaX < x_rayspace.x - diagH_raySpace ||
-                x_rayspace.y + diagH_raySpace < -tanThetaY || tanThetaY < x_rayspace.y - diagH_raySpace )
+            //float diagH_raySpace = sqrt( cov_00 + cov_11 + cov_22 ) / -u_camera.z; // half diagonal
+            //if(x_rayspace.x + diagH_raySpace < -tanThetaX || tanThetaX < x_rayspace.x - diagH_raySpace ||
+            //    x_rayspace.y + diagH_raySpace < -tanThetaY || tanThetaY < x_rayspace.y - diagH_raySpace )
+            //{
+            //    continue;
+            //}
+
+            // very rough but simple culling to avoid unstable splat projection, not conservative for large splats
+            if (tanThetaX * 2.0f < glm::abs(x_rayspace.x) || tanThetaY * 2.0f < glm::abs(x_rayspace.y))
             {
                 continue;
             }
@@ -837,7 +843,6 @@ int main() {
             //covPrime2d[1][1] += sqr( pxSize / 16.0f );
 
             glm::mat2 invCovPrime2d = glm::inverse(covPrime2d);
-
 
 
             //if( glm::abs(det_of_cov) < 0.0000001f )
